@@ -146,6 +146,16 @@ const ManageEvents = () => {
             }
           />
 
+              
+<TextInput
+            style={styles.input}
+            value={currentEvent?.location || ''}
+            placeholder="Event Location"
+            onChangeText={(text) =>
+              setCurrentEvent((prev) => ({ ...prev, category: text }))
+            }
+          />
+
 <TextInput
             style={styles.input}
             value={currentEvent?.category || ''}
