@@ -1,3 +1,5 @@
+
+
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, FlatList, Alert, Image, Modal, TextInput, ActivityIndicator } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
@@ -16,14 +18,10 @@ const ManageEvents = () => {
     const fetchEvents = async () => {
       try {
         const eventsSnapshot = await firestore().collection('events').get();
-        const eventsList = eventsSnapshot.docs.map((doc) => {
-          const eventData = doc.data();
-          console.log('Event Data:', eventData);  // Log the data to verify its structure
-          return {
-            id: doc.id,
-            ...eventData,
-          };
-        });
+        const eventsList = eventsSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
         setEvents(eventsList);
       } catch (error) {
         console.error('Error fetching events:', error);
@@ -36,11 +34,6 @@ const ManageEvents = () => {
   }, []);
 
   const handleDeleteEvent = async (eventId, imageUrl) => {
-    if (!imageUrl) {
-      Alert.alert('Error', 'Image URL is missing!');
-      return;
-    }
-
     Alert.alert('Delete Event', 'Are you sure you want to delete this event?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -48,8 +41,10 @@ const ManageEvents = () => {
         style: 'destructive',
         onPress: async () => {
           try {
-            const reference = storage().refFromURL(imageUrl);
-            await reference.delete();
+            if (imageUrl) {
+              const reference = storage().refFromURL(imageUrl);
+              await reference.delete();
+            }
             await firestore().collection('events').doc(eventId).delete();
             setEvents(events.filter((event) => event.id !== eventId));
             Alert.alert('Success', 'Event deleted successfully!');
@@ -64,7 +59,7 @@ const ManageEvents = () => {
 
   const handleEditEvent = (event) => {
     setCurrentEvent(event);
-    setNewImage(event.imageUrl);
+    setNewImage(null);
     setModalVisible(true);
   };
 
@@ -73,9 +68,11 @@ const ManageEvents = () => {
 
     try {
       const updatedEvent = { ...currentEvent };
-      if (newImage && newImage !== currentEvent.imageUrl) {
-        const reference = storage().refFromURL(currentEvent.imageUrl);
-        await reference.delete();
+      if (newImage) {
+        if (currentEvent.imageUrl) {
+          const reference = storage().refFromURL(currentEvent.imageUrl);
+          await reference.delete();
+        }
         const imageUrl = await uploadImageToStorage(newImage);
         updatedEvent.imageUrl = imageUrl;
       }
@@ -90,6 +87,13 @@ const ManageEvents = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const uploadImageToStorage = async (uri) => {
+    const fileName = uri.split('/').pop();
+    const reference = storage().ref(`events/${fileName}`);
+    await reference.putFile(uri);
+    return await reference.getDownloadURL();
   };
 
   const renderEventItem = ({ item }) => (
@@ -119,6 +123,79 @@ const ManageEvents = () => {
       ) : (
         <FlatList data={events} renderItem={renderEventItem} keyExtractor={(item) => item.id} />
       )}
+
+      {/* Edit Modal */}
+      <Modal visible={modalVisible} animationType="slide" onRequestClose={() => setModalVisible(false)}>
+        <View style={styles.modalContainer}>
+          <Text style={styles.modalTitle}>Edit Event</Text>
+
+          <TextInput
+            style={styles.input}
+            value={currentEvent?.title || ''}
+            placeholder="Event Title"
+            onChangeText={(text) =>
+              setCurrentEvent((prev) => ({ ...prev, title: text }))
+            }
+          />
+            <TextInput
+            style={styles.inputdescription}
+            value={currentEvent?.description || ''}
+            placeholder="Event Description"
+            onChangeText={(text) =>
+              setCurrentEvent((prev) => ({ ...prev, description: text }))
+            }
+          />
+
+<TextInput
+            style={styles.input}
+            value={currentEvent?.category || ''}
+            placeholder="Event Category"
+            onChangeText={(text) =>
+              setCurrentEvent((prev) => ({ ...prev, category: text }))
+            }
+          />
+
+          <TextInput
+            style={styles.input}
+            value={currentEvent?.date || ''}
+            placeholder="Event Date"
+            onChangeText={(text) =>
+              setCurrentEvent((prev) => ({ ...prev, date: text }))
+            }
+          />
+
+          <TouchableOpacity
+            style={[styles.button, { marginBottom: 10 }]}
+            onPress={async () => {
+              const result = await launchImageLibrary({
+                mediaType: 'photo',
+              });
+              if (result.assets && result.assets.length > 0) {
+                setNewImage(result.assets[0].uri);
+              }
+            }}
+          >
+            <Text style={styles.buttonText}>
+              {newImage ? 'Change Image' : 'Upload New Image'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.button, { marginBottom: 10 }]} onPress={handleSaveChanges} disabled={saving}>
+            {saving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Save Changes</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.deleteButton]}
+            onPress={() => setModalVisible(false)}
+          >
+            <Text style={styles.buttonText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -208,25 +285,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ccc',
   },
-  loadingText: {
-    textAlign: 'center',
-    color: '#1d3557',
-    fontSize: 16,
-    fontWeight: '600',
-    marginTop: 20,
-  },
-  emptyMessage: {
-    textAlign: 'center',
-    color: '#6c757d',
-    fontSize: 18,
-    marginTop: 20,
+  inputdescription: {
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    marginBottom: 15,
+    fontSize: 12,
+    borderWidth: 1,
+    borderColor: '#ccc',
   },
 });
 
 export default ManageEvents;
-
-
-
-
-
-
